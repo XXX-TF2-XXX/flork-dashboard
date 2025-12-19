@@ -103,7 +103,7 @@ donateBtn.onclick = async () => {
     const sig = await connection.sendRawTransaction(signed.serialize(), { maxRetries: 10 });
     await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight });
 
-    // Client-side add (no literal needed)
+    // Client-side add (safe, no literal)
     const wallet = window.solana.publicKey.toString();
     const { data: existing } = await supabaseClient.from('donations').select('total_sol, tx_ids').eq('wallet', wallet).maybeSingle();
     const currentTotal = existing?.total_sol || 0;
@@ -123,7 +123,7 @@ donateBtn.onclick = async () => {
     loadMultiplier();
   } catch (err) {
     console.error(err);
-    alert('Transaction failed: ' + (err.message || 'Unknown error'));
+    alert('Donation failed after tx: ' + (err.message || 'Check console'));
   }
 };
 </script>
