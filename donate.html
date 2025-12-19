@@ -45,12 +45,11 @@ async function loadMultiplier() {
       multiplierHud.textContent = 'Multiplier: 1x (Connect Phantom)';
       return;
     }
-    const { data } = await supabaseClient.from('donations').select('total_sol').eq('wallet', window.solana.publicKey.toString()).single();
+    const { data } = await supabaseClient.from('donations').select('total_sol').eq('wallet', window.solana.publicKey.toString()).maybeSingle();
     const multiplier = data ? Math.floor(data.total_sol / 0.01) + 1 : 1;
     multiplierHud.textContent = `Multiplier: ${multiplier}x`;
     window.parent.postMessage({ type: 'multiplierUpdate', multiplier }, '*');
   } catch (err) {
-    if (err.code !== 'PGRST116') console.error(err); // Ignore no row
     multiplierHud.textContent = 'Multiplier: 1x';
   }
 }
@@ -88,7 +87,7 @@ donateBtn.onclick = async () => {
 
     const tx = new solanaWeb3.Transaction();
     tx.feePayer = window.solana.publicKey;
-    tx.recentBlockhash = blockhash; // This line fixes the error
+    tx.recentBlockhash = blockhash;
 
     tx.add(solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }));
 
@@ -104,11 +103,25 @@ donateBtn.onclick = async () => {
     const sig = await connection.sendRawTransaction(signed.serialize(), { maxRetries: 10 });
     await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight });
 
+    // Fixed upsert without literal()
     const { error } = await supabaseClient.from('donations').upsert({
       wallet: window.solana.publicKey.toString(),
-      total_sol: supabaseClient.literal(`total_sol + ${amount}`),
-      tx_ids: supabaseClient.literal(`array_append(tx_ids, '${sig}')`)
-    }, { onConflict: 'wallet' });
+      total_sol: supabaseClient.rpc('add', { a: supabaseClient.from('donations').select('total_sol').eq('wallet', window.solana.publicKey.toString()), b: amount }).select().single(), // Alternative, or use:
+    }).onConflict('wallet');
+
+    // Simpler way: just upsert with calculated value (but since no literal, use raw)
+    // Better: use this simple upsert (adds to existing or creates new)
+    const { data: existing } = await supabaseClient.from('donations').select('total_sol').eq('wallet', window.solana.publicKey.toString()).maybeSingle();
+    const newTotal = (existing?.total_sol || 0) + amount;
+    const { error } = await supabaseClient.from('donations').upsert({
+      wallet: window.solana.publicKey.toString(),
+      total_sol: newTotal,
+      tx_ids: supabaseClient.from('donations').select('tx_ids').eq('wallet', window.solana.publicKey.toString()).maybeSingle().then(res => {
+        const arr = res.data?.tx_ids || [];
+        arr.push(sig);
+        return arr;
+      })
+    });
 
     if (error) throw error;
 
