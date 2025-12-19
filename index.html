@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>$FLORK Dashboard</title>
+  <style>
+    body {
+      background: #0a0a15;
+      color: #00ff9d;
+      font-family: 'Courier New', monospace;
+      margin: 0;
+      padding: 20px 10px;
+    }
+    h1 {
+      text-align: center;
+      color: #00ff9d;
+      text-shadow: 0 0 20px rgba(0,255,157,0.6);
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>$FLORK Dashboard</h1>
+
+    <!-- War Chest Tracker -->
+    <iframe src="warchest.html" style="width:100%; max-width:1000px; height:680px; border:none; border-radius:16px; box-shadow:0 0 30px rgba(0,255,157,0.4); margin-bottom:40px;"></iframe>
+
+    <!-- Game -->
+    <iframe src="game.html" style="width:100%; max-width:600px; height:760px; border:none; border-radius:16px; box-shadow:0 0 30px rgba(0,255,157,0.4); display:block; margin:0 auto 40px;"></iframe>
+
+    <!-- Donate Widget -->
+    <iframe src="donate.html" style="width:100%; max-width:600px; height:320px; border:none; border-radius:16px; box-shadow:0 0 30px rgba(255,0,255,0.4); display:block; margin:0 auto;"></iframe>
+  </div>
+</body>
+</html>

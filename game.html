@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flork vs Jeets</title>
+  <style>
+    body { margin: 0; background: #0a0a15; }
+  </style>
+</head>
+<body>
+<div style="background:#0a0a15;color:#00ff9d;padding:20px;border-radius:16px;font-family:'Courier New',monospace;box-shadow:0 0 30px rgba(0,255,157,0.4);max-width:600px;margin:0 auto;text-align:center;position:relative;">
+<h1 style="font-size:2em;margin-bottom:10px;">Flork vs Jeets 🧙⚔️</h1>
+<p style="margin-bottom:20px;">Tap or click anywhere to move Flork there and swing!</p>
+<canvas id="gameCanvas" style="display:block;margin:0 auto 20px;border:2px solid #00ff9d;border-radius:8px;touch-action:none;width:100%;max-width:400px;background:#000;"></canvas>
+<button id="startBtn" style="background:#1a1a2e;color:#00ff9d;padding:12px 24px;border:1px solid #00ff9d;border-radius:8px;cursor:pointer;font-size:1.1em;margin-right:10px;">Start Raid</button>
+<button id="leaderboardBtn" style="background:#1a1a2e;color:#00ff9d;padding:12px 24px;border:1px solid #00ff9d;border-radius:8px;cursor:pointer;font-size:1.1em;">Leaderboard</button>
+<p id="hud" style="font-size:1.3em;margin:10px 0;">Score: 0 | Jeets Killed: 0 | DCA Buys: <span id="dca">5</span> | Pump Meter: <span id="pump">0%</span></p>
+<p id="multiplierHud" style="font-size:1em;color:#00ffff;">Multiplier: 1x</p>
+<div id="pumpExplosion" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:4em;color:#ff00ff;text-shadow:0 0 20px #00ffff;pointer-events:none;display:none;z-index:15;">
+PUMP IT!!!
+</div>
+<div id="sharePopup" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.95);padding:30px;border-radius:16px;border:3px solid #00ffff;display:none;z-index:20;width:90%;max-width:400px;">
+<h2 style="color:#00ffff;font-size:1.8em;">PUMP ACHIEVED! 🚀</h2>
+<p style="font-size:1.2em;">You killed <span id="shareKills">0</span> Jeets!</p>
+<button id="shareBtn" style="background:#1da1f2;color:white;padding:12px 24px;border:none;border-radius:8px;cursor:pointer;font-size:1.2em;margin:10px;">Share to X</button>
+<button id="submitScoreBtn" style="background:#00ff9d;color:#0a0a15;padding:12px 24px;border:none;border-radius:8px;cursor:pointer;font-size:1.2em;margin:10px;">Submit to Leaderboard</button>
+<button id="closeShare" style="background:#1a1a2e;color:#00ff9d;padding:10px 20px;border:1px solid #00ff9d;border-radius:8px;cursor:pointer;">Continue Raiding</button>
+</div>
+<div id="gameOver" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.95);padding:30px;border-radius:16px;border:3px solid #ff0055;display:none;z-index:10;width:90%;max-width:400px;">
+<h2 style="color:#ff0055;font-size:2em;margin-top:0;">RAID FAILED - JEETS WIN</h2>
+<p style="font-size:1.2em;">Final Score: <span id="finalScore">0</span></p>
+<p style="font-size:1.2em;">Jeets Killed: <span id="finalKills">0</span></p>
+<p style="font-size:1.2em;">Pump Meter: <span id="finalPump">0%</span></p>
+<button id="shareEndBtn" style="background:#1da1f2;color:white;padding:12px 24px;border:none;border-radius:8px;cursor:pointer;font-size:1.1em;margin:10px;">Share Score to X</button>
+<button id="submitScoreBtnEnd" style="background:#00ff9d;color:#0a0a15;padding:12px 24px;border:none;border-radius:8px;cursor:pointer;font-size:1.1em;margin:10px;">Submit to Leaderboard</button>
+<button id="restartBtn" style="background:#1a1a2e;color:#00ff9d;padding:12px 24px;border:1px solid #00ff9d;border-radius:8px;cursor:pointer;font-size:1.1em;">Restart Raid</button>
+</div>
+<div id="leaderboard" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.95);padding:20px;border-radius:16px;border:3px solid #00ff9d;display:none;z-index:20;width:90%;max-width:450px;max-height:80%;overflow-y:auto;">
+<h2 style="color:#00ff9d;font-size:1.8em;">Leaderboard - Top Raiders</h2>
+<table style="width:100%;color:#00ff9d;border-collapse:collapse;margin-top:10px;">
+<thead><tr><th style="border-bottom:2px solid #00ff9d;padding:8px;">Rank</th><th style="border-bottom:2px solid #00ff9d;padding:8px;">Name</th><th style="border-bottom:2px solid #00ff9d;padding:8px;">Score</th><th style="border-bottom:2px solid #00ff9d;padding:8px;">Jeets</th><th style="border-bottom:2px solid #00ff9d;padding:8px;">Date</th></tr></thead>
+<tbody id="lbBody"><tr><td colspan="5">Loading leaderboard...</td></tr></tbody>
+</table>
+<button id="closeLb" style="background:#1a1a2e;color:#00ff9d;padding:10px 20px;border:1px solid #00ff9d;border-radius:8px;cursor:pointer;margin-top:20px;">Close</button>
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+<script>
+const { createClient } = supabase;
+const supabaseClient = createClient('https://agoaalstlgbsbymuyemx.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFnb2FhbHN0bGdic2J5bXV5ZW14Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MzY0OTIsImV4cCI6MjA4MTUxMjQ5Mn0.t-DSuGGo-wIPj8Wc4U_408D49nvyDdcI7BTA0ab6u6c');
+
+const idleImg = new Image(); idleImg.src = 'https://i.imgur.com/Af2t1yH.png';
+const swingImg = new Image(); swingImg.src = 'https://i.imgur.com/fbeO8QQ.png';
+let currentImg = idleImg;
+let swingTimer = 0;
+let score = 0, kills = 0, dcaBuys = 5, running = false, pump = 0;
+let flork = {x: 200, y: 250, facingRight: true};
+let jeets = [];
+let shake = 0;
+let particles = [];
+const c = document.getElementById('gameCanvas');
+const ctx = c.getContext('2d');
+const dcaEl = document.getElementById('dca');
+const pumpEl = document.getElementById('pump');
+const pumpExplosion = document.getElementById('pumpExplosion');
+const sharePopup = document.getElementById('sharePopup');
+const shareKills = document.getElementById('shareKills');
+const gameOver = document.getElementById('gameOver');
+const finalScore = document.getElementById('finalScore');
+const finalKills = document.getElementById('finalKills');
+const finalPump = document.getElementById('finalPump');
+const leaderboard = document.getElementById('leaderboard');
+const lbBody = document.getElementById('lbBody');
+const multiplierHud = document.getElementById('multiplierHud');
+const FLORK_HEIGHT = 120;
+
+function resizeCanvas() {
+  const ratio = 400 / 500;
+  const maxW = Math.min(400, window.innerWidth - 40);
+  c.width = maxW;
+  c.height = maxW / ratio;
+  flork.x = c.width / 2;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+function handleInput(e) {
+  if (!running) return;
+  e.preventDefault();
+  const rect = c.getBoundingClientRect();
+  const mx = (e.clientX || e.touches[0].clientX) - rect.left;
+  const my = (e.clientY || e.touches[0].clientY) - rect.top;
+  flork.y = Math.max(60, Math.min(c.height - 60, my));
+  flork.facingRight = mx > flork.x;
+  flork.x = Math.max(60, Math.min(c.width - 60, mx));
+  currentImg = swingImg;
+  swingTimer = 8;
+}
+c.addEventListener('click', handleInput);
+c.addEventListener('touchstart', handleInput);
+
+function spawnJeet() {
+  const side = Math.random() > 0.5 ? -1 : 1;
+  jeets.push({x: c.width / 2 + side * (c.width / 2 + 100), y: Math.random() * (c.height - 150) + 75, vx: -side * (2 + Math.random() * 1.5)});
+}
+
+function createParticles(x, y, color = '#fff') {
+  for (let i = 0; i < 12; i++) {
+    particles.push({x, y, vx: (Math.random() - 0.5) * 8, vy: (Math.random() - 0.5) * 8, life: 40, color});
+  }
+}
+
+function notifyGameStatus(status) {
+  window.parent.postMessage({ type: 'gameStatus', status }, '*');
+}
+
+function update() {
+  if (swingTimer > 0) swingTimer--;
+  else currentImg = idleImg;
+
+  jeets.forEach((j, i) => j.x += j.vx);
+
+  for (let i = jeets.length - 1; i >= 0; i--) {
+    const j = jeets[i];
+    const dist = Math.hypot(flork.x - j.x, flork.y - j.y);
+    const isFront = (flork.facingRight && j.x < flork.x) || (!flork.facingRight && j.x > flork.x);
+
+    if (isFront && swingTimer > 0 && dist < 110) {
+      kills++;
+      score += 10;
+      pump = Math.min(100, pump + 0.8);
+      createParticles(j.x, j.y);
+      jeets.splice(i, 1);
+      continue;
+    }
+
+    if (dist < 55) {
+      dcaBuys--;
+      shake = 15;
+      createParticles(flork.x, flork.y, '#ff0000');
+      jeets.splice(i, 1);
+      if (dcaBuys <= 0) endGame();
+      continue;
+    }
+
+    if (j.x < -100 || j.x > c.width + 100) jeets.splice(i, 1);
+  }
+
+  if (jeets.length < 7 && Math.random() < 0.028) spawnJeet();
+
+  particles = particles.filter(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life--;
+    return p.life > 0;
+  });
+
+  document.getElementById('hud').childNodes[0].nodeValue = `Score: ${score} | Jeets Killed: ${kills} | DCA Buys: `;
+  dcaEl.textContent = dcaBuys;
+  pumpEl.textContent = pump.toFixed(0) + '%';
+}
+
+function draw() {
+  ctx.clearRect(0, 0, c.width, c.height);
+
+  if (shake > 0) {
+    ctx.save();
+    ctx.translate((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12);
+    ctx.fillStyle = 'rgba(255,0,0,0.35)';
+    ctx.fillRect(0, 0, c.width, c.height);
+    shake--;
+  }
+
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life / 40;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - 3, p.y - 3, 6, 6);
+  });
+
+  ctx.globalAlpha = 1;
+
+  ctx.save();
+  ctx.translate(flork.x, flork.y);
+  if (!flork.facingRight) ctx.scale(-1, 1);
+  const scale = FLORK_HEIGHT / currentImg.height;
+  ctx.drawImage(currentImg, -currentImg.width * scale / 2, -currentImg.height * scale / 2, currentImg.width * scale, currentImg.height * scale);
+  ctx.restore();
+
+  jeets.forEach(j => {
+    ctx.save();
+    ctx.translate(j.x, j.y);
+    ctx.font = '36px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('💩', 0, 12);
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.moveTo(-12, -15);
+    ctx.lineTo(0, -25);
+    ctx.lineTo(12, -15);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = '10px monospace';
+    ctx.fillText('Jeet', 0, -30);
+    ctx.restore();
+  });
+
+  if (shake > 0) ctx.restore();
+}
+
+function loop() {
+  update();
+  draw();
+  if (running) requestAnimationFrame(loop);
+}
+
+function startGame() {
+  resizeCanvas();
+  score = 0; kills = 0; dcaBuys = 5; pump = 0;
+  jeets = []; particles = []; shake = 0;
+  flork.y = c.height / 2;
+  running = true;
+  gameOver.style.display = 'none';
+  sharePopup.style.display = 'none';
+  leaderboard.style.display = 'none';
+  notifyGameStatus('started');
+  loop();
+}
+
+function endGame() {
+  running = false;
+  finalScore.textContent = score;
+  finalKills.textContent = kills;
+  finalPump.textContent = pump.toFixed(0) + '%';
+  gameOver.style.display = 'block';
+  notifyGameStatus('stopped');
+}
+
+function shareToX(isEnd = false) {
+  const text = isEnd
+    ? `Raid over! Killed ${kills} Jeets in Flork vs Jeets 😤 $FLORK holders strong! Play: dashboard2.florkthecoin.xyz CA: w4JaiVxShfQRGDL9DEeBTYmzYL2QzrmN2QwgKmXpump`
+    : `Just hit 100% PUMP METER! Killed ${kills} Jeets 🚀 $FLORK to the moon!! Play: dashboard2.florkthecoin.xyz CA: w4JaiVxShfQRGDL9DEeBTYmzYL2QzrmN2QwgKmXpump`;
+  window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
+}
+
+window.addEventListener('message', (e) => {
+  if (e.data.type === 'multiplierUpdate') {
+    multiplierHud.textContent = `Multiplier: ${e.data.multiplier}x`;
+  }
+});
+
+async function connectWithRetry() {
+  if (!window.solana?.isPhantom) throw new Error('Phantom not detected');
+  let attempts = 0;
+  while (attempts < 3) {
+    try {
+      const resp = await window.solana.connect();
+      return resp.publicKey;
+    } catch (err) {
+      if (err.code === 4001) {
+        const retry = confirm('Connection declined. Retry?');
+        if (!retry) throw new Error('Cancelled');
+      } else throw err;
+      attempts++;
+    }
+  }
+  throw new Error('Max attempts reached');
+}
+
+async function submitScore() {
+  let publicKey;
+  try {
+    publicKey = await connectWithRetry();
+  } catch (err) {
+    return alert(err.message || 'Connection failed');
+  }
+
+  try {
+    const username = localStorage.getItem('florkUsername') || 'Anonymous';
+    const { data } = await supabaseClient.from('donations').select('total_sol').eq('wallet', publicKey.toString()).single();
+    const multiplier = data ? Math.floor(data.total_sol / 0.01) + 1 : 1;
+    await supabaseClient.from('scores').insert({
+      wallet: publicKey.toString(),
+      name: username,
+      score: score * multiplier,
+      kills: kills,
+      donated_sol: data?.total_sol || 0,
+      multiplier
+    });
+    alert('Score submitted!');
+  } catch (err) {
+    console.error(err);
+    alert('Submit failed—retry');
+  }
+}
+
+async function loadLeaderboard() {
+  try {
+    const { data } = await supabaseClient.from('scores').select('name, score, kills, timestamp').order('score', { ascending: false }).limit(10);
+    lbBody.innerHTML = data.map((r, i) => `<tr><td>${i+1}</td><td>${r.name}</td><td>${r.score}</td><td>${r.kills}</td><td>${new Date(r.timestamp).toLocaleDateString()}</td></tr>`).join('');
+  } catch (err) {
+    lbBody.innerHTML = '<tr><td colspan=5>Error loading</td></tr>';
+  }
+}
+
+document.getElementById('startBtn').onclick = startGame;
+document.getElementById('restartBtn').onclick = startGame;
+document.getElementById('shareBtn').onclick = () => shareToX(false);
+document.getElementById('shareEndBtn').onclick = () => shareToX(true);
+document.getElementById('closeShare').onclick = () => sharePopup.style.display = 'none';
+document.getElementById('closeLb').onclick = () => leaderboard.style.display = 'none';
+document.getElementById('leaderboardBtn').onclick = () => { loadLeaderboard(); leaderboard.style.display = 'block'; };
+document.getElementById('submitScoreBtn').onclick = submitScore;
+document.getElementById('submitScoreBtnEnd').onclick = submitScore;
+</script>
+</body>
+</html>

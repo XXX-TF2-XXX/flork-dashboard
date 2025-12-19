@@ -1,0 +1,163 @@
+<div style="background: #0a0a15; color: #00ff9d; padding: 20px; border-radius: 16px; font-family: 'Courier New', monospace; box-shadow: 0 0 30px rgba(0,255,157,0.4); max-width: 1000px; margin: 0 auto;">
+<h1 style="text-align:center; margin-bottom:20px; font-size:2.2em;">$FLORK War Chest Tracker</h1>
+<p style="text-align:center; margin-bottom:30px; font-size:1.1em; line-height:1.5;">Live on-chain transparency • Community stacking 1% wallets for future burns & supply control </p>
+
+<h2 style="border-bottom:2px solid #00ff9d; padding-bottom:8px; margin-bottom:20px;">War Chest Wallets</h2>
+
+<!-- Responsive table wrapper -->
+<div style="overflow-x:auto; margin-bottom:30px; border-radius:8px; border:1px solid #00ff9d;">
+<table id="wallet-table" style="width:100%; min-width:600px; border-collapse:collapse;">
+<thead><tr style="background:#1a1a2e;">
+<th style="padding:12px; border:1px solid #00ff9d; text-align:left; font-size:0.9em;">Wallet</th>
+<th style="padding:12px; border:1px solid #00ff9d; text-align:left; font-size:0.9em;">$FLORK Held</th>
+<th style="padding:12px; border:1px solid #00ff9d; text-align:left; font-size:0.9em;">% of Supply</th>
+<th style="padding:12px; border:1px solid #00ff9d; text-align:left; font-size:0.9em;">Value (USD)</th>
+</tr></thead>
+<tbody></tbody>
+</table>
+</div>
+
+<div id="war-total" style="font-size:1.4em; margin:30px 0; text-align:center;"></div>
+
+<div id="progress-bar" style="background:#1a1a2e; border-radius:12px; height:40px; margin-bottom:40px; overflow:hidden; position:relative;">
+<div id="progress-fill" style="background:linear-gradient(90deg, #00ff9d, #00c8ff); height:100%; width:0%; transition:width 1.5s ease;"></div>
+<div style="position:absolute; width:100%; top:50%; transform:translateY(-50%); text-align:center; font-weight:bold; font-size:1.1em;">Progress to Next 1% Wallet: <span id="progress-text">0%</span></div>
+</div>
+
+<h2 style="border-bottom:2px solid #00ff9d; padding-bottom:8px; margin-bottom:20px;">Live Token Stats</h2>
+<div id="token-stats" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:15px; margin-bottom:30px;"></div>
+
+<p style="text-align:center; font-size:0.85em; opacity:0.8;">Data updates every 30s • Sources: Helius RPC + DexScreener • Current as of <span id="timestamp"></span></p>
+</div>
+
+<!-- Mobile-specific tweaks -->
+<style>
+@media (max-width: 768px) {
+h1 { font-size: 1.8em !important; }
+p { font-size: 1em !important; }
+#war-total { font-size: 1.2em !important; }
+#progress-bar div { font-size: 1em !important; }
+#token-stats > div { padding: 15px !important; }
+}
+@media (max-width: 480px) {
+div[style*="padding: 20px"] { padding: 15px !important; }
+h1 { font-size: 1.6em !important; }
+}
+</style>
+
+<script>
+const TOKEN_MINT = 'w4JaiVxShfQRGDL9DEeBTYmzYL2QzrmN2QwgKmXpump';
+const TOTAL_SUPPLY = 1000000000;
+const TARGET_1_PERCENT = 10000000;
+
+const warChestWallets = [
+'J5bnMRjzYJCZzjTKUESkkAoH77HRwU7LHqjZPxe5VHR5', // Wallet #1
+'5YT1A4U5MXHNCVKegCDwQdXcbdhKCTCupc7fXmBeLHZK' // Wallet #2
+// Add more here
+];
+
+async function fetchTokenBalance(wallet) {
+try {
+const resp = await fetch('https://mainnet.helius-rpc.com/?api-key=27a75f83-3638-4241-b72b-aaa6ed64d7a2', {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({
+jsonrpc: '2.0', id: 1,
+method: 'getTokenAccountsByOwner',
+params: [wallet, { mint: TOKEN_MINT }, { encoding: 'jsonParsed' }]
+})
+});
+const data = await resp.json();
+if (data.result && data.result.value.length > 0) {
+return parseFloat(data.result.value[0].account.data.parsed.info.tokenAmount.uiAmountString || 0);
+}
+} catch (e) { console.error('Balance fetch error:', e); }
+return 0;
+}
+
+async function fetchDexScreenerData() {
+try {
+const resp = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${TOKEN_MINT}`);
+const json = await resp.json();
+if (json.pairs && json.pairs.length > 0) {
+const pair = json.pairs.find(p => p.chainId === 'solana') || json.pairs[0];
+return {
+priceUsd: parseFloat(pair.priceUsd) || 0,
+fdv: parseFloat(pair.fdv) || 0,
+liquidityUsd: parseFloat(pair.liquidity?.usd) || 0,
+volume24h: parseFloat(pair.volume?.h24) || 0
+};
+}
+} catch (e) { console.error(e); }
+return null;
+}
+
+async function updateDashboard() {
+let totalHeld = 0;
+let totalUsdValue = 0;
+let currentWalletProgress = 0;
+
+const tableBody = document.querySelector('#wallet-table tbody');
+tableBody.innerHTML = '';
+
+const tokenData = await fetchDexScreenerData();
+const priceUsd = tokenData?.priceUsd || 0;
+
+for (let i = 0; i < warChestWallets.length; i++) {
+const wallet = warChestWallets[i];
+const balance = await fetchTokenBalance(wallet);
+const pct = ((balance / TOTAL_SUPPLY) * 100).toFixed(3);
+const usdValue = balance * priceUsd;
+
+totalHeld += balance;
+totalUsdValue += usdValue;
+
+if (i === warChestWallets.length - 1) currentWalletProgress = balance;
+
+const row = tableBody.insertRow();
+row.innerHTML = `
+<td style="padding:12px; border:1px solid #00ff9d; font-size:0.9em;">
+<a href="https://solscan.io/account/${wallet}" target="_blank" style="color:#00ff9d; text-decoration:none;">${wallet}</a>
+</td>
+<td style="padding:12px; border:1px solid #00ff9d; font-size:0.9em;">${balance.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+<td style="padding:12px; border:1px solid #00ff9d; font-size:0.9em;">${pct}%</td>
+<td style="padding:12px; border:1px solid #00ff9d; font-size:0.9em;">$${usdValue.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+`;
+}
+
+const totalPct = ((totalHeld / TOTAL_SUPPLY) * 100).toFixed(3);
+document.getElementById('war-total').innerHTML = `
+<strong>Total Stacked:</strong> ${totalHeld.toLocaleString(undefined, {maximumFractionDigits: 0})} $FLORK
+(${totalPct}% of supply) ≈ $${totalUsdValue.toLocaleString(undefined, {maximumFractionDigits: 0})}
+`;
+
+const progressPct = Math.min(100, ((currentWalletProgress / TARGET_1_PERCENT) * 100)).toFixed(1);
+document.getElementById('progress-fill').style.width = `${progressPct}%`;
+document.getElementById('progress-text').textContent = `${progressPct}% (${currentWalletProgress.toLocaleString(undefined, {maximumFractionDigits: 0})} / 10M)`;
+
+const statsDiv = document.getElementById('token-stats');
+if (tokenData) {
+statsDiv.innerHTML = `
+<div style="background:#1a1a2e; padding:20px; border-radius:12px; border:1px solid #00ff9d; text-align:center;">
+<strong>Price</strong><br>$${tokenData.priceUsd.toFixed(8)}
+</div>
+<div style="background:#1a1a2e; padding:20px; border-radius:12px; border:1px solid #00ff9d; text-align:center;">
+<strong>FDV</strong><br>$${tokenData.fdv.toLocaleString()}
+</div>
+<div style="background:#1a1a2e; padding:20px; border-radius:12px; border:1px solid #00ff9d; text-align:center;">
+<strong>Liquidity</strong><br>$${tokenData.liquidityUsd.toLocaleString()}
+</div>
+<div style="background:#1a1a2e; padding:20px; border-radius:12px; border:1px solid #00ff9d; text-align:center;">
+<strong>24h Volume</strong><br>$${tokenData.volume24h.toLocaleString()}
+</div>
+`;
+} else {
+statsDiv.innerHTML = '<p style="grid-column:1/-1; text-align:center;">Loading stats...</p>';
+}
+
+document.getElementById('timestamp').textContent = new Date().toLocaleTimeString();
+}
+
+updateDashboard();
+setInterval(updateDashboard, 30000);
+</script>
