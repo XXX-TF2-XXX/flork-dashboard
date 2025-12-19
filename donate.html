@@ -1,13 +1,7 @@
+<!-- Full donate.html with fixes -->
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Donate for Multiplier</title>
-  <style>
-    body { margin: 0; background: transparent; }
-  </style>
-</head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Donate</title><style>body{margin:0;background:transparent;}</style></head>
 <body>
 <div style="background:#1a1a2e;color:#00ff9d;padding:20px;border-radius:16px;font-family:'Courier New',monospace;box-shadow:0 0 30px rgba(0,255,157,0.4);max-width:600px;margin:0 auto;text-align:center;">
 <h3 style="color:#ff00ff;">Donate SOL for Multiplier Boost 🧙</h3>
@@ -15,7 +9,6 @@
 <p id="multiplierHud" style="font-size:1.6em;color:#00ffff;margin:20px 0;">Multiplier: Loading...</p>
 <p style="font-size:0.9em;opacity:0.8;">0.01 SOL = +1x | Prize pool: 7UGbPH6hpRD6oW7sUtwXRYwXdBzYZAr4WWrAvobvs84R</p>
 </div>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
 <script>
@@ -31,112 +24,64 @@ function getUsername() {
     username = prompt('Pick a username for leaderboard:', 'Raider' + Math.floor(Math.random()*1000));
     if (username) localStorage.setItem('florkUsername', username.trim() || 'Anonymous');
   }
-  return username || 'Anonymous';
-}
-
-async function connectWithRetry() {
-  if (!window.solana?.isPhantom) throw new Error('Phantom not detected');
-  let attempts = 0;
-  while (attempts < 3) {
-    try {
-      const resp = await window.solana.connect();
-      return resp.publicKey;
-    } catch (err) {
-      if (err.code === 4001) {
-        const retry = confirm('Connection declined. Retry?');
-        if (!retry) throw new Error('Cancelled');
-      } else throw err;
-      attempts++;
-    }
-  }
-  throw new Error('Max attempts reached');
 }
 
 async function loadMultiplier() {
   multiplierHud.textContent = 'Multiplier: Loading...';
   try {
-    if (!window.solana?.isPhantom) {
-      multiplierHud.textContent = 'Multiplier: 1x (Install Phantom)';
-      return;
-    }
+    if (!window.solana?.isPhantom) { multiplierHud.textContent = 'Multiplier: 1x (Install Phantom)'; return; }
     await window.solana.connect({ onlyIfTrusted: true }).catch(() => {});
-    if (!window.solana.publicKey) {
-      multiplierHud.textContent = 'Multiplier: 1x (Connect Phantom)';
-      return;
-    }
-    const { data } = await supabaseClient.from('donations').select('total_sol').eq('wallet', window.solana.publicKey.toString()).single();
+    if (!window.solana.publicKey) { multiplierHud.textContent = 'Multiplier: 1x (Connect Phantom)'; return; }
+    const { data } = await supabaseClient.from('donations').select('total_sol').eq('wallet', window.solana.publicKey.toString()).maybeSingle(); // Use maybeSingle to avoid 406
     const multiplier = data ? Math.floor(data.total_sol / 0.01) + 1 : 1;
     multiplierHud.textContent = `Multiplier: ${multiplier}x`;
     window.parent.postMessage({ type: 'multiplierUpdate', multiplier }, '*');
-  } catch (err) {
-    multiplierHud.textContent = 'Multiplier: 1x';
-  }
+  } catch (err) { multiplierHud.textContent = 'Multiplier: 1x'; }
 }
 loadMultiplier();
 
 window.addEventListener('message', (e) => {
   if (e.data.type === 'gameStatus') {
-    if (e.data.status === 'started') {
-      donateBtn.disabled = true;
-      donateBtn.style.opacity = '0.5';
-      donateBtn.textContent = 'Donate (Game Active)';
-    } else if (e.data.status === 'stopped') {
-      donateBtn.disabled = false;
-      donateBtn.style.opacity = '1';
-      donateBtn.textContent = 'Donate for Multiplier';
-    }
+    donateBtn.disabled = e.data.status === 'started';
+    donateBtn.textContent = e.data.status === 'started' ? 'Donate (Game Active)' : 'Donate for Multiplier';
+    donateBtn.style.opacity = e.data.status === 'started' ? '0.5' : '1';
   }
 });
 
 donateBtn.onclick = async () => {
   if (donateBtn.disabled) return alert('Donate before starting the raid!');
-
   getUsername();
-
   const amountStr = prompt('SOL to donate (0.01 = +1x):', '0.01');
   const amount = parseFloat(amountStr);
   if (isNaN(amount) || amount < 0.01) return alert('Minimum 0.01 SOL required!');
-
-  let publicKey;
+  if (!window.solana?.isPhantom) return alert('Phantom not detected');
   try {
-    publicKey = await connectWithRetry();
-  } catch (err) {
-    return alert(err.message || 'Connection failed');
-  }
-
+    await window.solana.connect({ onlyIfTrusted: false });
+  } catch (err) { return alert('Connection failed or rejected'); }
   try {
     const connection = new solanaWeb3.Connection('https://mainnet.helius-rpc.com/?api-key=4b018f03-1fdd-4122-bc87-d73248e492d3');
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-
     const tx = new solanaWeb3.Transaction({
-      recentBlockhash: blockhash,
+      recentBlockhash: blockhash, // Fixed here
       lastValidBlockHeight,
       feePayer: window.solana.publicKey
-    }).add(
-      solanaWeb3.SystemProgram.transfer({
-        fromPubkey: window.solana.publicKey,
-        toPubkey: new solanaWeb3.PublicKey(prizePool),
-        lamports: Math.floor(amount * solanaWeb3.LAMPORTS_PER_SOL)
-      })
-    );
-
+    });
+    tx.add(solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }));
+    tx.add(solanaWeb3.SystemProgram.transfer({
+      fromPubkey: window.solana.publicKey,
+      toPubkey: new solanaWeb3.PublicKey(prizePool),
+      lamports: Math.floor(amount * solanaWeb3.LAMPORTS_PER_SOL)
+    }));
     const signed = await window.solana.signTransaction(tx);
-    const sig = await connection.sendRawTransaction(signed.serialize(), { maxRetries: 5 });
+    const sig = await connection.sendRawTransaction(signed.serialize(), { maxRetries: 10 });
     await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight });
-
-    const { error } = await supabaseClient.from('donations').upsert({
-      wallet: publicKey.toString(),
-      total_sol: supabaseClient.literal(`total_sol + ${amount}`),
-      tx_ids: supabaseClient.literal(`array_append(tx_ids, '${sig}')`)
-    }, { onConflict: 'wallet' });
-
+    const { error } = await supabaseClient.from('donations').upsert({ wallet: window.solana.publicKey.toString(), total_sol: supabaseClient.literal(`total_sol + ${amount}`), tx_ids: supabaseClient.literal(`array_append(tx_ids, '${sig}')`) }, { onConflict: 'wallet' });
     if (error) throw error;
-
-    alert(`Success! Donated ${amount} SOL. Sig: ${sig.slice(0,10)}...`);
+    alert(`Success! ${amount} SOL donated. Tx: https://solscan.io/tx/${sig}`);
     loadMultiplier();
   } catch (err) {
     console.error(err);
-    alert('Transaction failed—retry');
+    alert('Tx failed: ' + (err.message || 'Unknown'));
   }
 };
 </script>
