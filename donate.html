@@ -6,19 +6,26 @@
   <title>Donate for Multiplier</title>
   <style>
     body { margin: 0; background: transparent; }
-    #connectBtn { background: #00ffff; color: #1a1a2e; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 1.2em; margin: 10px 0; display: none; }
+    #mobileConnect { display: none; margin: 20px 0; }
+    #mobileConnect button { background: #ff00ff; color: white; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-size: 1.1em; margin: 5px; width: 100%; }
     #disconnectBtn { background: #ff0055; color: white; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em; margin-left: 10px; display: none; }
+    @media (max-width: 480px) { #mobileConnect button { width: 100%; margin: 5px 0; } }
   </style>
 </head>
 <body>
 <div style="background:#1a1a2e;color:#00ff9d;padding:20px;border-radius:16px;font-family:'Courier New',monospace;box-shadow:0 0 30px rgba(0,255,157,0.4);max-width:600px;margin:0 auto;text-align:center;">
 <h3 style="color:#ff00ff;">Donate SOL for Multiplier Boost 🧙</h3>
-<button id="connectBtn">Connect Mobile Wallet</button>
+<div id="mobileConnect">
+  <p style="font-size:1em;">Choose your wallet:</p>
+  <button id="connectPhantomBtn">Connect with Phantom</button>
+  <button id="connectSolflareBtn">Connect with Solflare</button>
+</div>
 <button id="disconnectBtn">Disconnect</button>
 <button id="donateBtn" style="background:#ff00ff;color:white;padding:16px 32px;border:none;border-radius:12px;cursor:pointer;font-size:1.4em;margin:20px 0;">Donate for Multiplier</button>
 <p id="multiplierHud" style="font-size:1.6em;color:#00ffff;margin:20px 0;">Multiplier: Loading...</p>
 <p style="font-size:0.9em;opacity:0.8;">0.01 SOL = +1x | Prize pool: 7UGbPH6hpRD6oW7sUtwXRYwXdBzYZAr4WWrAvobvs84R</p>
 </div>
+<a id="deepLinkAnchor" style="display:none;"></a>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
 <script src="https://unpkg.com/tweetnacl@1.0.3/nacl.min.js"></script>
@@ -28,8 +35,11 @@ const supabaseClient = createClient('https://agoaalstlgbsbymuyemx.supabase.co', 
 const multiplierHud = document.getElementById('multiplierHud');
 const prizePool = '7UGbPH6hpRD6oW7sUtwXRYwXdBzYZAr4WWrAvobvs84R';
 const donateBtn = document.getElementById('donateBtn');
-const connectBtn = document.getElementById('connectBtn');
+const mobileConnect = document.getElementById('mobileConnect');
+const connectPhantomBtn = document.getElementById('connectPhantomBtn');
+const connectSolflareBtn = document.getElementById('connectSolflareBtn');
 const disconnectBtn = document.getElementById('disconnectBtn');
+const deepLinkAnchor = document.getElementById('deepLinkAnchor');
 
 // Mobile detection
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -52,7 +62,7 @@ function encryptPayload(payload, sharedSecret) {
   const nonce = nacl.randomBytes(nacl.box.nonceLength);
   const messageUint8 = new TextEncoder().encode(JSON.stringify(payload));
   const encrypted = nacl.box.after(messageUint8, nonce, sharedSecret);
-  return { nonce: bs58.encode(nonce), encrypted: bs58.encode(encrypted) };
+  return { nonce: bs58.encode(nonce), encrypted: bs58.encode(new Uint8Array(encrypted)) };
 }
 
 function decryptPayload(encryptedB58, nonceB58, sharedSecret) {
@@ -119,7 +129,7 @@ function getEncParamName(walletType) {
 function buildConnectUrl(walletType) {
   const { publicKey } = getDappKeyPair();
   const cluster = 'mainnet-beta';
-  const appUrl = encodeURIComponent(window.location.origin);
+  const appUrl = encodeURIComponent(window.location.origin + window.location.pathname);
   const redirectLink = encodeURIComponent(window.location.href.split('?')[0] + '?connect_callback=true&wallet=' + walletType);
   const params = new URLSearchParams({
     dapp_encryption_public_key: publicKey,
@@ -128,6 +138,22 @@ function buildConnectUrl(walletType) {
     redirect_link: redirectLink
   });
   return `${getWalletBase(walletType)}/ul/v1/connect?${params.toString()}`;
+}
+
+function launchDeepLink(url, walletType) {
+  console.log(`Launching ${walletType} deep link:`, url);
+  deepLinkAnchor.href = url;
+  deepLinkAnchor.target = '_blank';
+  deepLinkAnchor.rel = 'noopener noreferrer';
+  deepLinkAnchor.style.display = 'block';
+  deepLinkAnchor.click();
+  deepLinkAnchor.style.display = 'none';
+  // Fallback if blocked
+  setTimeout(() => {
+    if (confirm(`Couldn't open ${walletType} app. Copy link to open manually?`)) {
+      navigator.clipboard.writeText(url).then(() => alert('Link copied! Paste in a new tab or browser address bar.'));
+    }
+  }, 2000);
 }
 
 async function processConnectCallback() {
@@ -151,6 +177,8 @@ async function processConnectCallback() {
     const session = decrypted.session;
     saveStoredData({ walletPubKey, session, sharedSecret: bs58.encode(sharedSecret), walletType });
     alert(`Connected with ${walletType}!`);
+    mobileConnect.style.display = 'none';
+    disconnectBtn.style.display = 'inline';
     return true;
   } catch (err) {
     console.error('Connect callback error:', err);
@@ -193,8 +221,7 @@ async function processSignCallback() {
   localStorage.removeItem('temp_donate_amount');
   const stored = loadStoredData();
   const wallet = stored.walletPubKey;
-  const { data: existing, error: selectError } = await supabaseClient.from('donations').select('total_sol, tx_ids').eq('wallet', wallet).maybeSingle();
-  if (selectError) throw selectError;
+  const { data: existing } = await supabaseClient.from('donations').select('total_sol, tx_ids').eq('wallet', wallet).maybeSingle();
   const currentTotal = existing?.total_sol || 0;
   const currentTxs = existing?.tx_ids || [];
   currentTxs.push(signature);
@@ -240,11 +267,11 @@ async function loadMultiplier() {
   } else {
     if (isConnected()) {
       pubKey = stored.walletPubKey;
-      connectBtn.style.display = 'none';
+      mobileConnect.style.display = 'none';
       disconnectBtn.style.display = 'inline';
     } else {
       multiplierHud.textContent = 'Multiplier: 1x (Connect Wallet)';
-      connectBtn.style.display = 'block';
+      mobileConnect.style.display = 'block';
       return;
     }
   }
@@ -266,17 +293,20 @@ window.addEventListener('message', (e) => {
   }
 });
 
-connectBtn.onclick = () => {
-  const choice = prompt('Which wallet? (phantom or solflare)', 'phantom').toLowerCase().trim();
-  if (choice !== 'phantom' && choice !== 'solflare') return alert('Invalid choice');
-  const url = buildConnectUrl(choice);
-  window.open(url, '_blank');
+connectPhantomBtn.onclick = () => {
+  const url = buildConnectUrl('phantom');
+  launchDeepLink(url, 'Phantom');
+};
+
+connectSolflareBtn.onclick = () => {
+  const url = buildConnectUrl('solflare');
+  launchDeepLink(url, 'Solflare');
 };
 
 disconnectBtn.onclick = () => {
   if (confirm('Disconnect wallet?')) {
     clearStoredData();
-    connectBtn.style.display = 'block';
+    mobileConnect.style.display = 'block';
     disconnectBtn.style.display = 'none';
     loadMultiplier();
   }
@@ -290,6 +320,7 @@ donateBtn.onclick = async () => {
   if (isNaN(amount) || amount < 0.01) return alert('Minimum 0.01 SOL required!');
   try {
     if (!isMobile) {
+      // Desktop flow (unchanged)
       if (!window.solana?.isPhantom) return alert('Phantom wallet not detected');
       await window.solana.connect({ onlyIfTrusted: false });
       const connection = new solanaWeb3.Connection('https://mainnet.helius-rpc.com/?api-key=4b018f03-1fdd-4122-bc87-d73248e492d3');
@@ -322,6 +353,7 @@ donateBtn.onclick = async () => {
       alert(`Success! Donated ${amount} SOL. Tx: https://solscan.io/tx/${sig}`);
       loadMultiplier();
     } else {
+      // Mobile flow
       if (!isConnected()) return alert('Please connect your wallet first!');
       const stored = loadStoredData();
       const sharedSecret = bs58.decode(stored.sharedSecret);
@@ -341,7 +373,7 @@ donateBtn.onclick = async () => {
       const serializedTx = tx.serialize({ requireAllSignatures: false });
       const signUrl = buildSignUrl(stored.walletType, serializedTx, stored.session, sharedSecret);
       localStorage.setItem('temp_donate_amount', amount.toString());
-      window.open(signUrl, '_blank');
+      launchDeepLink(signUrl, stored.walletType.charAt(0).toUpperCase() + stored.walletType.slice(1));
     }
   } catch (err) {
     console.error(err);
