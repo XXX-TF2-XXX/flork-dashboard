@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Donate for Multiplier</title>
-  <style>
-    body { margin: 0; background: transparent; }
-  </style>
+&nbsp;&nbsp;<meta charset="UTF-8">
+&nbsp;&nbsp;<meta name="viewport" content="width=device-width, initial-scale=1.0">
+&nbsp;&nbsp;<title>Donate for Multiplier</title>
+&nbsp;&nbsp;<style>
+&nbsp;&nbsp;&nbsp;&nbsp;body { margin: 0; background: transparent; }
+&nbsp;&nbsp;</style>
 </head>
 <body>
 <div style="background:#1a1a2e;color:#00ff9d;padding:20px;border-radius:16px;font-family:'Courier New',monospace;box-shadow:0 0 30px rgba(0,255,157,0.4);max-width:600px;margin:0 auto;text-align:center;">
@@ -15,7 +15,6 @@
 <p id="multiplierHud" style="font-size:1.6em;color:#00ffff;margin:20px 0;">Multiplier: Loading...</p>
 <p style="font-size:0.9em;opacity:0.8;">0.01 SOL = +1x | Prize pool: 7UGbPH6hpRD6oW7sUtwXRYwXdBzYZAr4WWrAvobvs84R</p>
 </div>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
 <script>
@@ -24,107 +23,88 @@ const supabaseClient = createClient('https://agoaalstlgbsbymuyemx.supabase.co', 
 const multiplierHud = document.getElementById('multiplierHud');
 const prizePool = '7UGbPH6hpRD6oW7sUtwXRYwXdBzYZAr4WWrAvobvs84R';
 const donateBtn = document.getElementById('donateBtn');
-
 function getUsername() {
-  let username = localStorage.getItem('florkUsername');
-  if (!username) {
-    username = prompt('Pick a username for leaderboard:', 'Raider' + Math.floor(Math.random()*1000));
-    if (username) localStorage.setItem('florkUsername', username.trim() || 'Anonymous');
-  }
+&nbsp;&nbsp;let username = localStorage.getItem('florkUsername');
+&nbsp;&nbsp;if (!username) {
+&nbsp;&nbsp;&nbsp;&nbsp;username = prompt('Pick a username for leaderboard:', 'Raider' + Math.floor(Math.random()*1000));
+&nbsp;&nbsp;&nbsp;&nbsp;if (username) localStorage.setItem('florkUsername', username.trim() || 'Anonymous');
+&nbsp;&nbsp;}
 }
-
 async function loadMultiplier() {
-  multiplierHud.textContent = 'Multiplier: Loading...';
-  try {
-    if (!window.solana?.isPhantom) {
-      multiplierHud.textContent = 'Multiplier: 1x (Install Phantom)';
-      return;
-    }
-    await window.solana.connect({ onlyIfTrusted: true }).catch(() => {});
-    if (!window.solana.publicKey) {
-      multiplierHud.textContent = 'Multiplier: 1x (Connect Phantom)';
-      return;
-    }
-    const { data } = await supabaseClient.from('donations').select('total_sol').eq('wallet', window.solana.publicKey.toString()).maybeSingle();
-    const multiplier = data ? Math.floor(data.total_sol / 0.01) + 1 : 1;
-    multiplierHud.textContent = `Multiplier: ${multiplier}x`;
-    window.parent.postMessage({ type: 'multiplierUpdate', multiplier }, '*');
-  } catch (err) {
-    multiplierHud.textContent = 'Multiplier: 1x';
-  }
+&nbsp;&nbsp;multiplierHud.textContent = 'Multiplier: Loading...';
+&nbsp;&nbsp;try {
+&nbsp;&nbsp;&nbsp;&nbsp;if (!window.solana?.isPhantom) {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;multiplierHud.textContent = 'Multiplier: 1x (Install Phantom)';
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;
+&nbsp;&nbsp;&nbsp;&nbsp;}
+&nbsp;&nbsp;&nbsp;&nbsp;await window.solana.connect({ onlyIfTrusted: true }).catch(() => {});
+&nbsp;&nbsp;&nbsp;&nbsp;if (!window.solana.publicKey) {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;multiplierHud.textContent = 'Multiplier: 1x (Connect Phantom)';
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;
+&nbsp;&nbsp;&nbsp;&nbsp;}
+&nbsp;&nbsp;&nbsp;&nbsp;const { data } = await supabaseClient.from('donations').select('total_sol').eq('wallet', window.solana.publicKey.toString()).maybeSingle();
+&nbsp;&nbsp;&nbsp;&nbsp;const multiplier = data ? Math.floor(data.total_sol / 0.01) + 1 : 1;
+&nbsp;&nbsp;&nbsp;&nbsp;multiplierHud.textContent = `Multiplier: ${multiplier}x`;
+&nbsp;&nbsp;&nbsp;&nbsp;window.parent.postMessage({ type: 'multiplierUpdate', multiplier }, '*');
+&nbsp;&nbsp;} catch (err) {
+&nbsp;&nbsp;&nbsp;&nbsp;multiplierHud.textContent = 'Multiplier: 1x';
+&nbsp;&nbsp;}
 }
 loadMultiplier();
-
 window.addEventListener('message', (e) => {
-  if (e.data.type === 'gameStatus') {
-    donateBtn.disabled = e.data.status === 'started';
-    donateBtn.textContent = e.data.status === 'started' ? 'Donate (Game Active)' : 'Donate for Multiplier';
-    donateBtn.style.opacity = e.data.status === 'started' ? '0.5' : '1';
-  }
+&nbsp;&nbsp;if (e.data.type === 'gameStatus') {
+&nbsp;&nbsp;&nbsp;&nbsp;donateBtn.disabled = e.data.status === 'started';
+&nbsp;&nbsp;&nbsp;&nbsp;donateBtn.textContent = e.data.status === 'started' ? 'Donate (Game Active)' : 'Donate for Multiplier';
+&nbsp;&nbsp;&nbsp;&nbsp;donateBtn.style.opacity = e.data.status === 'started' ? '0.5' : '1';
+&nbsp;&nbsp;}
 });
-
 donateBtn.onclick = async () => {
-  if (donateBtn.disabled) return alert('Donate before starting the raid!');
-
-  getUsername();
-
-  const amountStr = prompt('SOL to donate (0.01 = +1x):', '0.01');
-  const amount = parseFloat(amountStr);
-  if (isNaN(amount) || amount < 0.01) return alert('Minimum 0.01 SOL required!');
-
-  if (!window.solana?.isPhantom) return alert('Phantom wallet not detected');
-
-  try {
-    await window.solana.connect({ onlyIfTrusted: false });
-  } catch (err) {
-    return alert('Connection rejected or failed');
-  }
-
-  try {
-    const connection = new solanaWeb3.Connection('https://mainnet.helius-rpc.com/?api-key=4b018f03-1fdd-4122-bc87-d73248e492d3');
-
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-
-    const tx = new solanaWeb3.Transaction();
-    tx.feePayer = window.solana.publicKey;
-    tx.recentBlockhash = blockhash;
-
-    tx.add(solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }));
-
-    tx.add(
-      solanaWeb3.SystemProgram.transfer({
-        fromPubkey: window.solana.publicKey,
-        toPubkey: new solanaWeb3.PublicKey(prizePool),
-        lamports: Math.floor(amount * solanaWeb3.LAMPORTS_PER_SOL)
-      })
-    );
-
-    const signed = await window.solana.signTransaction(tx);
-    const sig = await connection.sendRawTransaction(signed.serialize(), { maxRetries: 10 });
-    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight });
-
-    // Client-side add (safe, no literal)
-    const wallet = window.solana.publicKey.toString();
-    const { data: existing } = await supabaseClient.from('donations').select('total_sol, tx_ids').eq('wallet', wallet).maybeSingle();
-    const currentTotal = existing?.total_sol || 0;
-    const currentTxs = existing?.tx_ids || [];
-
-    currentTxs.push(sig);
-
-    const { error } = await supabaseClient.from('donations').upsert({
-      wallet: wallet,
-      total_sol: currentTotal + amount,
-      tx_ids: currentTxs
-    });
-
-    if (error) throw error;
-
-    alert(`Success! Donated ${amount} SOL. Tx: https://solscan.io/tx/${sig}`);
-    loadMultiplier();
-  } catch (err) {
-    console.error(err);
-    alert('Donation failed after tx: ' + (err.message || 'Check console'));
-  }
+&nbsp;&nbsp;if (donateBtn.disabled) return alert('Donate before starting the raid!');
+&nbsp;&nbsp;getUsername();
+&nbsp;&nbsp;const amountStr = prompt('SOL to donate (0.01 = +1x):', '0.01');
+&nbsp;&nbsp;const amount = parseFloat(amountStr);
+&nbsp;&nbsp;if (isNaN(amount) || amount < 0.01) return alert('Minimum 0.01 SOL required!');
+&nbsp;&nbsp;if (!window.solana?.isPhantom) return alert('Phantom wallet not detected');
+&nbsp;&nbsp;try {
+&nbsp;&nbsp;&nbsp;&nbsp;await window.solana.connect({ onlyIfTrusted: false });
+&nbsp;&nbsp;} catch (err) {
+&nbsp;&nbsp;&nbsp;&nbsp;return alert('Connection rejected or failed');
+&nbsp;&nbsp;}
+&nbsp;&nbsp;try {
+&nbsp;&nbsp;&nbsp;&nbsp;const connection = new solanaWeb3.Connection('https://mainnet.helius-rpc.com/?api-key=4b018f03-1fdd-4122-bc87-d73248e492d3');
+&nbsp;&nbsp;&nbsp;&nbsp;const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+&nbsp;&nbsp;&nbsp;&nbsp;const tx = new solanaWeb3.Transaction();
+&nbsp;&nbsp;&nbsp;&nbsp;tx.feePayer = window.solana.publicKey;
+&nbsp;&nbsp;&nbsp;&nbsp;tx.recentBlockhash = blockhash;
+&nbsp;&nbsp;&nbsp;&nbsp;tx.add(solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }));
+&nbsp;&nbsp;&nbsp;&nbsp;tx.add(
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;solanaWeb3.SystemProgram.transfer({
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fromPubkey: window.solana.publicKey,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;toPubkey: new solanaWeb3.PublicKey(prizePool),
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lamports: Math.floor(amount * solanaWeb3.LAMPORTS_PER_SOL)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;})
+&nbsp;&nbsp;&nbsp;&nbsp;);
+&nbsp;&nbsp;&nbsp;&nbsp;const signed = await window.solana.signTransaction(tx);
+&nbsp;&nbsp;&nbsp;&nbsp;const sig = await connection.sendRawTransaction(signed.serialize(), { maxRetries: 10 });
+&nbsp;&nbsp;&nbsp;&nbsp;await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight });
+&nbsp;&nbsp;&nbsp;&nbsp;// Client-side add (safe, no literal)
+&nbsp;&nbsp;&nbsp;&nbsp;const wallet = window.solana.publicKey.toString();
+&nbsp;&nbsp;&nbsp;&nbsp;const { data: existing } = await supabaseClient.from('donations').select('total_sol, tx_ids').eq('wallet', wallet).maybeSingle();
+&nbsp;&nbsp;&nbsp;&nbsp;const currentTotal = existing?.total_sol || 0;
+&nbsp;&nbsp;&nbsp;&nbsp;const currentTxs = existing?.tx_ids || [];
+&nbsp;&nbsp;&nbsp;&nbsp;currentTxs.push(sig);
+&nbsp;&nbsp;&nbsp;&nbsp;const { error } = await supabaseClient.from('donations').upsert({
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wallet: wallet,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;total_sol: currentTotal + amount,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tx_ids: currentTxs
+&nbsp;&nbsp;&nbsp;&nbsp;});
+&nbsp;&nbsp;&nbsp;&nbsp;if (error) throw error;
+&nbsp;&nbsp;&nbsp;&nbsp;alert(`Success! Donated ${amount} SOL. Tx: https://solscan.io/tx/${sig}`);
+&nbsp;&nbsp;&nbsp;&nbsp;loadMultiplier();
+&nbsp;&nbsp;} catch (err) {
+&nbsp;&nbsp;&nbsp;&nbsp;console.error(err);
+&nbsp;&nbsp;&nbsp;&nbsp;alert('Donation failed after tx: ' + (err.message || 'Check console'));
+&nbsp;&nbsp;}
 };
 </script>
 </body>
