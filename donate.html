@@ -6,24 +6,223 @@
   <title>Donate for Multiplier</title>
   <style>
     body { margin: 0; background: transparent; }
+    #connectSection { display: none; background: rgba(26, 26, 46, 0.8); padding: 15px; border-radius: 8px; margin: 10px 0; }
+    #connectSection button { background: #ff00ff; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 1em; margin: 5px; width: 45%; }
+    @media (max-width: 480px) { #connectSection button { width: 100%; margin: 5px 0; } }
   </style>
 </head>
 <body>
 <div style="background:#1a1a2e;color:#00ff9d;padding:20px;border-radius:16px;font-family:'Courier New',monospace;box-shadow:0 0 30px rgba(0,255,157,0.4);max-width:600px;margin:0 auto;text-align:center;">
 <h3 style="color:#ff00ff;">Donate SOL for Multiplier Boost 🧙</h3>
+<div id="connectSection">
+  <h4 style="margin-bottom:10px;">Connect your mobile wallet</h4>
+  <button id="connectPhantom">Connect Phantom</button>
+  <button id="connectSolflare">Connect Solflare</button>
+</div>
 <button id="donateBtn" style="background:#ff00ff;color:white;padding:16px 32px;border:none;border-radius:12px;cursor:pointer;font-size:1.4em;margin:20px 0;">Donate for Multiplier</button>
 <p id="multiplierHud" style="font-size:1.6em;color:#00ffff;margin:20px 0;">Multiplier: Loading...</p>
 <p style="font-size:0.9em;opacity:0.8;">0.01 SOL = +1x | Prize pool: 7UGbPH6hpRD6oW7sUtwXRYwXdBzYZAr4WWrAvobvs84R</p>
 </div>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+<script src="https://unpkg.com/tweetnacl@1.0.3/nacl.min.js"></script>
 <script>
 const { createClient } = supabase;
 const supabaseClient = createClient('https://agoaalstlgbsbymuyemx.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFnb2FhbHN0bGdic2J5bXV5ZW14Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MzY0OTIsImV4cCI6MjA4MTUxMjQ5Mn0.t-DSuGGo-wIPj8Wc4U_408D49nvyDdcI7BTA0ab6u6c');
 const multiplierHud = document.getElementById('multiplierHud');
 const prizePool = '7UGbPH6hpRD6oW7sUtwXRYwXdBzYZAr4WWrAvobvs84R';
 const donateBtn = document.getElementById('donateBtn');
+const connectSection = document.getElementById('connectSection');
+const connectPhantomBtn = document.getElementById('connectPhantom');
+const connectSolflareBtn = document.getElementById('connectSolflare');
+
+// Mobile detection
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+// Storage keys
+const STORAGE = {
+  dappPublicKey: 'flork_dappPublicKey',
+  dappSecretKey: 'flork_dappSecretKey',
+  walletPubKey: 'flork_walletPubKey',
+  session: 'flork_session',
+  sharedSecret: 'flork_sharedSecret',
+  walletType: 'flork_walletType'
+};
+
+// Crypto utils
+const nacl = window.nacl;
+const bs58 = solanaWeb3.bs58;
+
+function encryptPayload(payload, sharedSecret) {
+  const nonce = nacl.randomBytes(nacl.box.nonceLength);
+  const messageUint8 = new TextEncoder().encode(JSON.stringify(payload));
+  const encrypted = nacl.box.after(messageUint8, nonce, sharedSecret);
+  return [nonce, new Uint8Array(encrypted)];
+}
+
+function decryptPayload(encryptedB58, nonceB58, sharedSecret) {
+  const encrypted = bs58.decode(encryptedB58);
+  const nonce = bs58.decode(nonceB58);
+  const decrypted = nacl.box.open.after(encrypted, nonce, sharedSecret);
+  if (!decrypted) throw new Error('Decryption failed');
+  return JSON.parse(new TextDecoder().decode(decrypted));
+}
+
+function loadStoredData() {
+  const dappPublicKey = localStorage.getItem(STORAGE.dappPublicKey);
+  const dappSecretKey = localStorage.getItem(STORAGE.dappSecretKey);
+  const walletPubKey = localStorage.getItem(STORAGE.walletPubKey);
+  const session = localStorage.getItem(STORAGE.session);
+  const sharedSecret = localStorage.getItem(STORAGE.sharedSecret);
+  const walletType = localStorage.getItem(STORAGE.walletType);
+  return { dappPublicKey, dappSecretKey, walletPubKey, session, sharedSecret, walletType };
+}
+
+function saveStoredData({ dappPublicKey, dappSecretKey, walletPubKey, session, sharedSecret, walletType }) {
+  if (dappPublicKey) localStorage.setItem(STORAGE.dappPublicKey, dappPublicKey);
+  if (dappSecretKey) localStorage.setItem(STORAGE.dappSecretKey, dappSecretKey);
+  if (walletPubKey) localStorage.setItem(STORAGE.walletPubKey, walletPubKey);
+  if (session) localStorage.setItem(STORAGE.session, session);
+  if (sharedSecret) localStorage.setItem(STORAGE.sharedSecret, sharedSecret);
+  if (walletType) localStorage.setItem(STORAGE.walletType, walletType);
+}
+
+function generateDappKeyPair() {
+  const keyPair = nacl.box.keyPair();
+  const publicKey = bs58.encode(keyPair.publicKey);
+  const secretKey = bs58.encode(keyPair.secretKey);
+  saveStoredData({ dappPublicKey: publicKey, dappSecretKey: secretKey });
+  return { publicKey, secretKey: keyPair.secretKey };
+}
+
+function getDappKeyPair() {
+  const stored = loadStoredData();
+  if (stored.dappPublicKey && stored.dappSecretKey) {
+    return {
+      publicKey: stored.dappPublicKey,
+      secretKey: bs58.decode(stored.dappSecretKey)
+    };
+  }
+  return generateDappKeyPair();
+}
+
+function isConnected() {
+  const stored = loadStoredData();
+  return !!stored.walletPubKey && !!stored.session;
+}
+
+function getWalletBase(walletType) {
+  return walletType === 'phantom' ? 'https://phantom.app' : 'https://solflare.com';
+}
+
+function getEncParamName(walletType) {
+  return walletType === 'phantom' ? 'phantom_encryption_public_key' : 'solflare_encryption_public_key';
+}
+
+function buildConnectUrl(walletType) {
+  const { publicKey } = getDappKeyPair();
+  const appUrl = encodeURIComponent(window.location.href);
+  const redirectLink = encodeURIComponent(`${window.location.href.split('?')[0]}?connect_callback=true&wallet=${walletType}`);
+  const params = new URLSearchParams({
+    dapp_encryption_public_key: publicKey,
+    cluster: 'mainnet-beta',
+    app_url: appUrl,
+    redirect_link: redirectLink
+  });
+  const base = getWalletBase(walletType);
+  return `${base}/ul/v1/connect?${params.toString()}`;
+}
+
+function processConnectCallback() {
+  const urlParams = new URLSearchParams(window.location.search);
+  if (!urlParams.has('connect_callback')) return false;
+  const walletType = urlParams.get('wallet');
+  if (!walletType) return false;
+  const encParamName = getEncParamName(walletType);
+  const encPubKeyB58 = urlParams.get(encParamName);
+  const nonceB58 = urlParams.get('nonce');
+  const dataB58 = urlParams.get('data');
+  if (!encPubKeyB58 || !nonceB58 || !dataB58) {
+    alert('Connection failed: Missing callback data');
+    return true;
+  }
+  try {
+    const { secretKey } = getDappKeyPair();
+    const walletEncPubKey = bs58.decode(encPubKeyB58);
+    const sharedSecret = nacl.box.before(walletEncPubKey, secretKey);
+    const decrypted = decryptPayload(dataB58, nonceB58, sharedSecret);
+    const walletPubKey = decrypted.public_key;
+    const session = decrypted.session;
+    saveStoredData({ walletPubKey, session, sharedSecret: bs58.encode(sharedSecret), walletType });
+    alert(`Connected with ${walletType.charAt(0).toUpperCase() + walletType.slice(1)}!`);
+    loadMultiplier();
+    return true;
+  } catch (err) {
+    console.error(err);
+    alert('Connection decryption failed');
+    return true;
+  }
+}
+
+function buildSignUrl(walletType, serializedTx, session, sharedSecret) {
+  const { publicKey } = getDappKeyPair();
+  const payload = { transaction: bs58.encode(serializedTx), session };
+  const [nonce, encryptedPayload] = encryptPayload(payload, sharedSecret);
+  const redirectLink = encodeURIComponent(`${window.location.href.split('?')[0]}?sign_callback=true&wallet=${walletType}`);
+  const params = new URLSearchParams({
+    dapp_encryption_public_key: publicKey,
+    nonce: bs58.encode(nonce),
+    redirect_link: redirectLink,
+    payload: bs58.encode(encryptedPayload)
+  });
+  const base = getWalletBase(walletType);
+  return `${base}/ul/v1/signAndSendTransaction?${params.toString()}`;
+}
+
+function processSignCallback() {
+  const urlParams = new URLSearchParams(window.location.search);
+  if (!urlParams.has('sign_callback')) return false;
+  const walletType = urlParams.get('wallet');
+  if (!walletType) return false;
+  const signature = urlParams.get('signature');
+  const errorCode = urlParams.get('errorCode');
+  const errorMessage = urlParams.get('errorMessage');
+  if (errorCode || errorMessage) {
+    alert(`Transaction rejected: ${errorMessage || 'Unknown error'}`);
+    return true;
+  }
+  if (!signature) {
+    alert('Transaction failed: No signature received');
+    return true;
+  }
+  // Upsert to DB (amount from global or pass via storage/session)
+  // Note: Amount is global in donate func, but for callback, assume we store it temp in ls before open
+  const amount = parseFloat(localStorage.getItem('temp_donate_amount') || '0');
+  localStorage.removeItem('temp_donate_amount');
+  const wallet = loadStoredData().walletPubKey;
+  const { data: existing } = await supabaseClient.from('donations').select('total_sol, tx_ids').eq('wallet', wallet).maybeSingle();
+  const currentTotal = existing?.total_sol || 0;
+  const currentTxs = existing?.tx_ids || [];
+  currentTxs.push(signature);
+  const { error } = await supabaseClient.from('donations').upsert({
+    wallet,
+    total_sol: currentTotal + amount,
+    tx_ids: currentTxs
+  });
+  if (error) throw error;
+  alert(`Success! Donated ${amount} SOL. Tx: https://solscan.io/tx/${signature}`);
+  loadMultiplier();
+  localStorage.removeItem('temp_donate_amount');
+  return true;
+}
+
+// Clean URL after callback
+function cleanUrl() {
+  if (window.history.replaceState) {
+    const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + window.location.hash;
+    window.history.replaceState(null, null, newUrl);
+  }
+}
 
 function getUsername() {
   let username = localStorage.getItem('florkUsername');
@@ -35,25 +234,43 @@ function getUsername() {
 
 async function loadMultiplier() {
   multiplierHud.textContent = 'Multiplier: Loading...';
-  try {
+  const stored = loadStoredData();
+  let pubKey;
+  if (!isMobile) {
     if (!window.solana?.isPhantom) {
       multiplierHud.textContent = 'Multiplier: 1x (Install Phantom)';
       return;
     }
-    await window.solana.connect({ onlyIfTrusted: true }).catch(() => {});
+    try {
+      await window.solana.connect({ onlyIfTrusted: true });
+      pubKey = window.solana.publicKey.toString();
+    } catch {}
     if (!window.solana.publicKey) {
       multiplierHud.textContent = 'Multiplier: 1x (Connect Phantom)';
       return;
     }
-    const { data } = await supabaseClient.from('donations').select('total_sol').eq('wallet', window.solana.publicKey.toString()).maybeSingle();
+    pubKey = window.solana.publicKey.toString();
+  } else {
+    if (stored.walletPubKey) {
+      pubKey = stored.walletPubKey;
+    } else {
+      multiplierHud.textContent = 'Multiplier: 1x (Connect Wallet)';
+      connectSection.style.display = 'block';
+      return;
+    }
+  }
+  try {
+    const { data } = await supabaseClient.from('donations').select('total_sol').eq('wallet', pubKey).maybeSingle();
     const multiplier = data ? Math.floor(data.total_sol / 0.01) + 1 : 1;
     multiplierHud.textContent = `Multiplier: ${multiplier}x`;
     window.parent.postMessage({ type: 'multiplierUpdate', multiplier }, '*');
   } catch (err) {
     multiplierHud.textContent = 'Multiplier: 1x';
   }
+  if (isMobile && isConnected()) {
+    connectSection.style.display = 'none';
+  }
 }
-loadMultiplier();
 
 window.addEventListener('message', (e) => {
   if (e.data.type === 'gameStatus') {
@@ -63,34 +280,35 @@ window.addEventListener('message', (e) => {
   }
 });
 
+connectPhantomBtn.onclick = () => {
+  window.location.href = buildConnectUrl('phantom');
+};
+
+connectSolflareBtn.onclick = () => {
+  window.location.href = buildConnectUrl('solflare');
+};
+
 donateBtn.onclick = async () => {
   if (donateBtn.disabled) return alert('Donate before starting the raid!');
-
   getUsername();
-
   const amountStr = prompt('SOL to donate (0.01 = +1x):', '0.01');
   const amount = parseFloat(amountStr);
   if (isNaN(amount) || amount < 0.01) return alert('Minimum 0.01 SOL required!');
-
-  if (!window.solana?.isPhantom) return alert('Phantom wallet not detected');
-
-  try {
-    await window.solana.connect({ onlyIfTrusted: false });
-  } catch (err) {
-    return alert('Connection rejected or failed');
-  }
-
-  try {
+  let wallet, tx;
+  if (!isMobile) {
+    if (!window.solana?.isPhantom) return alert('Phantom wallet not detected');
+    try {
+      await window.solana.connect({ onlyIfTrusted: false });
+    } catch (err) {
+      return alert('Connection rejected or failed');
+    }
+    wallet = window.solana.publicKey.toString();
     const connection = new solanaWeb3.Connection('https://mainnet.helius-rpc.com/?api-key=4b018f03-1fdd-4122-bc87-d73248e492d3');
-
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-
-    const tx = new solanaWeb3.Transaction();
+    tx = new solanaWeb3.Transaction();
     tx.feePayer = window.solana.publicKey;
     tx.recentBlockhash = blockhash;
-
     tx.add(solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }));
-
     tx.add(
       solanaWeb3.SystemProgram.transfer({
         fromPubkey: window.solana.publicKey,
@@ -98,34 +316,54 @@ donateBtn.onclick = async () => {
         lamports: Math.floor(amount * solanaWeb3.LAMPORTS_PER_SOL)
       })
     );
-
     const signed = await window.solana.signTransaction(tx);
     const sig = await connection.sendRawTransaction(signed.serialize(), { maxRetries: 10 });
     await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight });
-
-    // Client-side add (safe, no literal)
-    const wallet = window.solana.publicKey.toString();
+    // Upsert
     const { data: existing } = await supabaseClient.from('donations').select('total_sol, tx_ids').eq('wallet', wallet).maybeSingle();
     const currentTotal = existing?.total_sol || 0;
     const currentTxs = existing?.tx_ids || [];
-
     currentTxs.push(sig);
-
     const { error } = await supabaseClient.from('donations').upsert({
-      wallet: wallet,
+      wallet,
       total_sol: currentTotal + amount,
       tx_ids: currentTxs
     });
-
     if (error) throw error;
-
     alert(`Success! Donated ${amount} SOL. Tx: https://solscan.io/tx/${sig}`);
     loadMultiplier();
-  } catch (err) {
-    console.error(err);
-    alert('Donation failed after tx: ' + (err.message || 'Check console'));
+  } else {
+    if (!isConnected()) return alert('Please connect your wallet first!');
+    const stored = loadStoredData();
+    const { secretKey } = getDappKeyPair();
+    const walletEncPubKey = bs58.decode(bs58.decode(stored.sharedSecret)); wait no, sharedSecret is already the before.
+    // sharedSecret is stored as bs58(sharedSecret Uint8Array)
+    const sharedSecretUint8 = bs58.decode(stored.sharedSecret);
+    const connection = new solanaWeb3.Connection('https://mainnet.helius-rpc.com/?api-key=4b018f03-1fdd-4122-bc87-d73248e492d3');
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx = new solanaWeb3.Transaction();
+    tx.feePayer = new solanaWeb3.PublicKey(stored.walletPubKey);
+    tx.recentBlockhash = blockhash;
+    tx.add(solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }));
+    tx.add(
+      solanaWeb3.SystemProgram.transfer({
+        fromPubkey: new solanaWeb3.PublicKey(stored.walletPubKey),
+        toPubkey: new solanaWeb3.PublicKey(prizePool),
+        lamports: Math.floor(amount * solanaWeb3.LAMPORTS_PER_SOL)
+      })
+    );
+    const serializedTx = tx.serialize({ requireAllSignatures: false });
+    const signUrl = buildSignUrl(stored.walletType, serializedTx, stored.session, sharedSecretUint8);
+    localStorage.setItem('temp_donate_amount', amount.toString());
+    window.location.href = signUrl;
   }
 };
+
+// Init
+if (processConnectCallback() || processSignCallback()) {
+  cleanUrl();
+}
+loadMultiplier();
 </script>
 </body>
 </html>
